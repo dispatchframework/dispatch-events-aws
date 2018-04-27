@@ -2,9 +2,6 @@ FROM golang:1.10 as builder
 
 WORKDIR ${GOPATH}/src/github.com/dispatchframework/dispatch-events-aws
 
-RUN pwd
-
-# array as input
 COPY ["driver.go", "Gopkg.lock", "Gopkg.toml", "./"]
 
 RUN go get -u github.com/golang/dep/cmd/dep
