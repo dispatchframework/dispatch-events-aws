@@ -7,8 +7,7 @@ COPY ["driver.go", "Gopkg.lock", "Gopkg.toml", "./"]
 RUN go get -u github.com/golang/dep/cmd/dep
 RUN dep ensure
 
-RUN CGO_ENABLED=0 GOOS=linux go build -a -o dispatch-events-aws
-RUN cp ./dispatch-events-aws /dispatch-events-aws
+RUN CGO_ENABLED=0 GOOS=linux go build -a -o /dispatch-events-aws
 
 
 FROM scratch

@@ -31,13 +31,13 @@ $ docker build -t dispatch-events-aws .
 
 ### 5. Create Eventdrivertype in Dispatch
 ```bash
-$ dispatch create eventdrivertype aws-event-driver-type dispatch-events-aws:latest
-Created event driver type: aws-event-driver-type
+$ dispatch create eventdrivertype aws-sqs dispatch-events-aws:latest
+Created event driver type: aws-sqs
 ```
 
 ### 6. Create Eventdriver in Dispatch
 ```bash
-$ dispatch create eventdriver aws-event-driver-type
+$ dispatch create eventdriver aws-sqs
 Created event driver: holy-grackle-805996
 ```
 
