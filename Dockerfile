@@ -13,7 +13,6 @@ RUN CGO_ENABLED=0 GOOS=linux go build -a -o /dispatch-events-aws
 FROM scratch
 
 ADD cacert-2018-03-07.pem /etc/ssl/certs/
-COPY credentials /
 COPY --from=builder /dispatch-events-aws /
 
 ENTRYPOINT [ "/dispatch-events-aws" ]

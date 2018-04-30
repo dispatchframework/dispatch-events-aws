@@ -2,11 +2,10 @@
 This repo contains a template for aws SQS event driver support for Dispatch.
 
 ### 1. Get AWS credentials
-Follow [`Get AWS Access Key`](https://docs.aws.amazon.com/sdk-for-go/v1/developer-guide/setting-up.html) to obtain aws credential. Modify `<ACCESS_KEY_ID>` and `<SECRET_ACCESS_KEY>` in **credentials** file under this repo:
-```
-[default]
-aws_access_key_id = <ACCESS_KEY_ID>
-aws_secret_access_key = <SECRET_ACCESS_KEY>
+Follow [`Get AWS Access Key`](https://docs.aws.amazon.com/sdk-for-go/v1/developer-guide/setting-up.html) to obtain aws credential, take a note for `<aws_access_key_id>` and `<aws_secret_access_key>`. Create env varbiable for these two fields:
+```bash
+$ export AWS_AKID=<aws_access_key_id>
+$ export AWS_SECRET_KEY=<aws_secret_access_key>
 ```
 
 ### 2. Create AWS SQS Queue *[will be managed by Dispatch]*
@@ -37,12 +36,12 @@ Created event driver type: aws-sqs
 
 ### 6. Create Eventdriver in Dispatch
 ```bash
-$ dispatch create eventdriver aws-sqs
+$ dispatch create eventdriver aws-sqs --set access-key-id=${AWS_AKID} --set secret-key=${AWS_SECRET_KEY}
 Created event driver: holy-grackle-805996
 ```
 
 ### 7. Create Subscription in Dispatch
-
+For example, create a `aws.signin` event subscription:
 ```bash
 $ dispatch create subscription hello-py --event-type="aws.signin" --source-type="aws"
 created subscription: innocent-werewolf-420270

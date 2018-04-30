@@ -30,7 +30,8 @@ var driverClient driverclient.Client
 var queueURL string
 
 var awsRegion = flag.String("region", "us-west-2", "Set aws region")
-var awsProfile = flag.String("profile", "default", "Set aws shared credentials profile")
+var awsAKId = flag.String("access-key-id", "", "AWS credential access id [aws_access_key_id] field")
+var awsSecretKey = flag.String("secret-key", "", "AWS credential secret access key [aws_secret_access_key] field")
 var sqsQueueName = flag.String("queue-name", "dispatch", "Set SQS queue name")
 var fetchDuration = flag.Int64("duration", 20, "Fetching duration in seconds")
 
@@ -41,7 +42,7 @@ func getSession() *session.Session {
 	return session.Must(session.NewSessionWithOptions(session.Options{
 		Config: aws.Config{
 			Region:      aws.String(*awsRegion),
-			Credentials: credentials.NewSharedCredentials("./credentials", *awsProfile),
+			Credentials: credentials.NewStaticCredentials(*awsAKId, *awsSecretKey, ""),
 		},
 	}))
 }
