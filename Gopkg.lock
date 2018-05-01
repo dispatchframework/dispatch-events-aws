@@ -24,10 +24,13 @@
     "internal/sdkrand",
     "internal/shareddefaults",
     "private/protocol",
+    "private/protocol/json/jsonutil",
+    "private/protocol/jsonrpc",
     "private/protocol/query",
     "private/protocol/query/queryutil",
     "private/protocol/rest",
     "private/protocol/xml/xmlutil",
+    "service/cloudwatchevents",
     "service/sqs",
     "service/sts"
   ]
@@ -171,6 +174,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "7700b5b4fcf6bdf2ad5c206715d33c376906b46e8a75fb34f474f2398190cf08"
+  inputs-digest = "04a50d1272b5b3eeb5bb5e8048ff69282d7278b76439841c0a8f4ff20f0ee072"
   solver-name = "gps-cdcl"
   solver-version = 1
