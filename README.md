@@ -7,6 +7,20 @@ Follow [`Get AWS Access Key`](https://docs.aws.amazon.com/sdk-for-go/v1/develope
 $ export AWS_AKID=<aws_access_key_id>
 $ export AWS_SECRET_KEY=<aws_secret_access_key>
 ```
+Then create a Dispatch secret file:
+```bash
+$ cat << EOF > secret.json
+{
+    "aws_access_key_id": "${AWS_AKID}",
+    "aws_secret_access_key": "${AWS_SECRET_KEY}"
+}
+EOF
+```
+Create a Dispatch secret which contains aws credentials:
+```bash
+& dispatch create secret aws-credential secret.json
+Created secret: aws-credential
+```
 
 ### 2. Build Event Driver Image
 ```bash
@@ -21,7 +35,7 @@ Created event driver type: aws-sqs
 
 ### 4. Create Eventdriver in Dispatch
 When creating AWS-eventdriver, following arguments should be specified properly:
-* `region`, `access-key-id` and `secret-key` : obtained from step 1
+* `region`: obtained from step 1, default *us-west-2*
 * Ways to invoke target: *Event Pattern* or *Schedule*:
   * `event-pattern` : setting up event pattern for AWS CloudWatch Rule, refer to [AWS Event Pattern](https://docs.aws.amazon.com/AmazonCloudWatch/latest/events/CloudWatchEventsandEventPatterns.html) for more details.
   * `schedule-expression` : specifying event schedule expression, please refer to [AWS Schedule Events](https://docs.aws.amazon.com/AmazonCloudWatch/latest/events/ScheduledEvents.html) for details.
@@ -37,13 +51,13 @@ Following parameters are optional (have defaults):
 
 For example, create a event driver by `event-pattern`:
 ```bash
-$ dispatch create eventdriver aws-sqs --set region="us-west-2" --set access-key-id=${AWS_AKID} --set secret-key=${AWS_SECRET_KEY} --set clean-up="true" --set event-pattern="{\"source\":[\"aws.autoscaling\"]}"
+$ dispatch create eventdriver aws-sqs --secret aws-credential --set region="us-west-2" --set event-pattern="{\"source\":[\"aws.autoscaling\"]}" --set clean-up
 Created event driver: holy-grackle-805996
 ```
 
 or by `schedule-expression`:
 ```bash
-$ dispatch create eventdriver aws-sqs --set region="us-west-2" --set access-key-id=${AWS_AKID} --set secret-key=${AWS_SECRET_KEY} --set clean-up="true" --set schedule-expression="rate(1 minute)"
+$ dispatch create eventdriver aws-sqs --secret aws-credential --set region="us-west-2" --set schedule-expression="rate(1 minute)" --set clean-up
 Created event driver: trusting-marlin-576200
 ```
 
