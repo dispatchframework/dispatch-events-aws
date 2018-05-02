@@ -35,8 +35,8 @@ var sqsQueueURL *string
 
 // AWS args
 var awsRegion = flag.String("region", "us-west-2", "Set aws region")
-var awsAKId = flag.String("access-key-id", "", "AWS credential access id [aws_access_key_id] field")
-var awsSecretKey = flag.String("secret-key", "", "AWS credential secret access key [aws_secret_access_key] field")
+var awsAKId = os.Getenv("AWS_ACCESS_KEY_ID")
+var awsSecretKey = os.Getenv("AWS_SECRET_ACCESS_KEY")
 
 // CloudWatch args
 var ruleName = flag.String("rule-name", "dispatch", "Rule name in CloudWatch event")
@@ -61,7 +61,7 @@ func getSession() *session.Session {
 	return session.Must(session.NewSessionWithOptions(session.Options{
 		Config: aws.Config{
 			Region:      awsRegion,
-			Credentials: credentials.NewStaticCredentials(*awsAKId, *awsSecretKey, ""),
+			Credentials: credentials.NewStaticCredentials(awsAKId, awsSecretKey, ""),
 		},
 	}))
 }
