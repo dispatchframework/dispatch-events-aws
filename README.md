@@ -28,10 +28,10 @@ $ docker build -t dispatch-events-aws .
 ```
 
 ### 3. Create Eventdrivertype in Dispatch
-Create a Dispatch eventdrivertype with name *aws-sqs*:
+Create a Dispatch eventdrivertype with name *aws*:
 ```bash
-$ dispatch create eventdrivertype aws-sqs dispatch-events-aws:latest
-Created event driver type: aws-sqs
+$ dispatch create eventdrivertype aws dispatch-events-aws:latest
+Created event driver type: aws
 ```
 
 ### 4. Create Eventdriver in Dispatch
@@ -51,13 +51,13 @@ Following parameters are optional (have defaults):
 
 All parameters should be configued through `--set` flag. For example, create a event driver using `event-pattern`:
 ```bash
-$ dispatch create eventdriver aws-sqs --secret aws-credential --set region="us-west-2" --set event-pattern="{\"source\":[\"aws.autoscaling\"]}" --set clean-up
+$ dispatch create eventdriver aws --secret aws-credential --set region="us-west-2" --set event-pattern="{\"source\":[\"aws.autoscaling\"]}" --set clean-up
 Created event driver: holy-grackle-805996
 ```
 
 or using `schedule-expression`:
 ```bash
-$ dispatch create eventdriver aws-sqs --secret aws-credential --set region="us-west-2" --set schedule-expression="rate(1 minute)" --set clean-up
+$ dispatch create eventdriver aws --secret aws-credential --set region="us-west-2" --set schedule-expression="rate(1 minute)" --set clean-up
 Created event driver: trusting-marlin-576200
 ```
 

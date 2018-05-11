@@ -120,7 +120,8 @@ func handleEvent(m *sqs.Message) {
 		SourceID:           *eventSourceID,
 		EventID:            uuid.NewV4().String(),
 		EventTime:          time.Now(),
-		Data:               m.String(),
+		ContentType:        "application/json",
+		Data:               *m.Body,
 	}
 	// Push event to Dispatch
 	if err := driverClient.SendOne(ev); err != nil {
@@ -297,6 +298,9 @@ func putRuleAndTarget(rN, pattern, qURL, qName *string) {
 func prepare() {
 
 	flag.Parse()
+	// make queue name unique to avoid '60 seconds' waiting time
+	fullName := *sqsQueueName + "-" + uuid.NewV4().String()
+	sqsQueueName = &fullName
 
 	// init aws session and service
 	sess = getSession()
