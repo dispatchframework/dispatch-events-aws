@@ -31,7 +31,7 @@ var sess *session.Session
 var sqsService *sqs.SQS
 var cweService *cloudwatchevents.CloudWatchEvents
 var driverClient driverclient.Client
-var sqsQueueURL *string
+var sqsQueueURL, sqsQueueARN *string
 
 // AWS args
 var awsRegion = flag.String("region", "us-west-2", "Set aws region")
@@ -39,8 +39,13 @@ var awsAKId = os.Getenv("AWS_ACCESS_KEY_ID")
 var awsSecretKey = os.Getenv("AWS_SECRET_ACCESS_KEY")
 
 // CloudWatch args
-var ruleName = flag.String("rule-name", "dispatch", "Rule name in CloudWatch event")
-var eventPattern = flag.String("event-pattern", "", "Event pattern for AWS CloudWatch Rule, should be a JSON string, for example: {\"source\":[\"aws.autoscaling\"]}")
+type cwRuleEntry struct {
+	name string
+	arn  string
+}
+
+var cwRules []cwRuleEntry
+var eventPatterns = flag.String("event-patterns", "", "Event patterns for AWS CloudWatch Rule(json string slice)")
 var scheduleExpression = flag.String("schedule-expression", "", "Schedule expression, For example, cron(0 20 * * ? *) or rate(5 minutes).")
 
 // SQS args
@@ -66,7 +71,7 @@ func getSession() *session.Session {
 	}))
 }
 
-func getQueueURL(queueName *string) (url *string) {
+func getQueueURLAndARN(queueName *string) (url, arn *string) {
 
 	urlRes, err := sqsService.GetQueueUrl(&sqs.GetQueueUrlInput{
 		QueueName: queueName,
@@ -98,6 +103,17 @@ func getQueueURL(queueName *string) (url *string) {
 	} else {
 		url = urlRes.QueueUrl
 	}
+
+	// get queue arn
+	queueArnAttribute := aws.String("QueueArn")
+	getQueueAttributeOutput, _ := sqsService.GetQueueAttributes(&sqs.GetQueueAttributesInput{
+		QueueUrl: url,
+		AttributeNames: []*string{
+			queueArnAttribute,
+		},
+	})
+	arn = getQueueAttributeOutput.Attributes[*queueArnAttribute]
+
 	return
 }
 
@@ -174,7 +190,8 @@ func getDriverClient() driverclient.Client {
 	return client
 }
 
-func addQueuePermission(rArn, qURL, qArn *string) error {
+func addQueuePermission(rules []cwRuleEntry, qURL, qARN *string) error {
+
 	// Add required permission to sqs target
 	// https://docs.aws.amazon.com/AmazonCloudWatch/latest/events/resource-based-policies-cwe.html
 	// https://docs.aws.amazon.com/sdk-for-go/v1/developer-guide/iam-example-policies.html
@@ -198,25 +215,29 @@ func addQueuePermission(rArn, qURL, qArn *string) error {
 			Statement []StatementEntry
 		}
 	)
-	policy := PolicyEntry{
-		Version: "2012-10-17",
-		Id:      *qArn + "/SQSDefaultPolicy",
-		Statement: []StatementEntry{
-			StatementEntry{
-				Sid:      "TrustCWEToSendEventsToSQS",
-				Effect:   "Allow",
-				Action:   "sqs:SendMessage",
-				Resource: *qArn,
-				Condition: ConditionEntry{
-					ArnEquals: map[string]string{
-						"aws:SourceArn": *rArn,
-					},
-				},
-				Principal: map[string]string{
-					"Service": "events.amazonaws.com",
+
+	statements := []StatementEntry{}
+	for _, rule := range rules {
+		statements = append(statements, StatementEntry{
+			Sid:      "Trust-" + rule.name + "-toSendMessage",
+			Effect:   "Allow",
+			Action:   "sqs:SendMessage",
+			Resource: *qARN,
+			Condition: ConditionEntry{
+				ArnEquals: map[string]string{
+					"aws:SourceArn": rule.arn,
 				},
 			},
-		},
+			Principal: map[string]string{
+				"Service": "events.amazonaws.com",
+			},
+		})
+	}
+
+	policy := PolicyEntry{
+		Version:   "2012-10-17",
+		Id:        *qARN + "/SQSDefaultPolicy",
+		Statement: statements,
 	}
 	policyBytes, _ := json.Marshal(policy)
 	policyString := string(policyBytes)
@@ -232,52 +253,32 @@ func addQueuePermission(rArn, qURL, qArn *string) error {
 		return err
 	}
 
-	log.Printf("Attributes set")
+	log.Printf("Attributes set and put permission done.")
 	return nil
 }
 
-func putRuleAndTarget(rN, pattern, qURL, qName *string) {
-
+func putRuleAndTargetForScheduleExp(rN, scheduleExp, qName, qURL, qARN *string) {
 	// put rule
 	var (
 		putRuleOutput *cloudwatchevents.PutRuleOutput
 		err           error
 	)
-	if *scheduleExpression == "" {
-		putRuleOutput, err = cweService.PutRule(&cloudwatchevents.PutRuleInput{
-			Name:         rN,
-			Description:  aws.String("Dispatch AWS event driver rule with EventPattern"),
-			EventPattern: pattern,
-			State:        aws.String(cloudwatchevents.RuleStateEnabled),
-		})
-	} else {
-		putRuleOutput, err = cweService.PutRule(&cloudwatchevents.PutRuleInput{
-			Name:               rN,
-			Description:        aws.String("Dispatch AWS event driver rule with Schedule Experssion"),
-			ScheduleExpression: scheduleExpression,
-			State:              aws.String(cloudwatchevents.RuleStateEnabled),
-		})
-	}
+	putRuleOutput, err = cweService.PutRule(&cloudwatchevents.PutRuleInput{
+		Name:               rN,
+		Description:        aws.String("Dispatch AWS event driver rule with Schedule Experssion"),
+		ScheduleExpression: scheduleExp,
+		State:              aws.String(cloudwatchevents.RuleStateEnabled),
+	})
+
 	if err != nil {
 		panic(err)
 	}
 	log.Printf("PutRuleOutput: %s\n", putRuleOutput.String())
 
-	// get queue arn
-	queueArnAttribute := string("QueueArn")
-	getQueueAttributeOutput, _ := sqsService.GetQueueAttributes(&sqs.GetQueueAttributesInput{
-		QueueUrl: qURL,
-		AttributeNames: []*string{
-			&queueArnAttribute,
-		},
+	cwRules = append(cwRules, cwRuleEntry{
+		name: *rN,
+		arn:  *putRuleOutput.RuleArn,
 	})
-	queueArn := getQueueAttributeOutput.Attributes[queueArnAttribute]
-	log.Printf("Queue ARN: %s \n", *queueArn)
-
-	// before put target, add permission to sqs target. Allow CloudWatch to SendMessage to sqs.
-	if err := addQueuePermission(putRuleOutput.RuleArn, qURL, queueArn); err != nil {
-		log.Printf("Failed to add permission to SQS queue: %s. Please make sure user has required privileges. \n", err.Error())
-	}
 
 	// put queue as target in rule
 	_, err = cweService.PutTargets(&cloudwatchevents.PutTargetsInput{
@@ -285,14 +286,59 @@ func putRuleAndTarget(rN, pattern, qURL, qName *string) {
 		Targets: []*cloudwatchevents.Target{
 			&cloudwatchevents.Target{
 				Id:  qName,
-				Arn: queueArn,
+				Arn: qARN,
 			},
 		},
 	})
 	if err != nil {
 		panic(err)
 	}
-	log.Printf("Put rule and target done. \n")
+	log.Printf("Put schedule expression rule and target done. \n")
+}
+
+func putRuleAndTargetForEventPattern(rN, pattern, qName, qURL, qARN *string) {
+
+	// put rule
+	var (
+		putRuleOutput *cloudwatchevents.PutRuleOutput
+		err           error
+	)
+	putRuleOutput, err = cweService.PutRule(&cloudwatchevents.PutRuleInput{
+		Name:         rN,
+		Description:  aws.String("Dispatch AWS event driver rule with EventPattern"),
+		EventPattern: pattern,
+		State:        aws.String(cloudwatchevents.RuleStateEnabled),
+	})
+
+	if err != nil {
+		panic(err)
+	}
+	log.Printf("PutRuleOutput: %s\n", putRuleOutput.String())
+
+	cwRules = append(cwRules, cwRuleEntry{
+		name: *rN,
+		arn:  *putRuleOutput.RuleArn,
+	})
+
+	// put queue as target in rule
+	_, err = cweService.PutTargets(&cloudwatchevents.PutTargetsInput{
+		Rule: rN,
+		Targets: []*cloudwatchevents.Target{
+			&cloudwatchevents.Target{
+				Id:  qName,
+				Arn: qARN,
+			},
+		},
+	})
+	if err != nil {
+		panic(err)
+	}
+	log.Printf("Put event pattern rule and target done. \n")
+}
+
+func generateRuleName() *string {
+	rN := "dispatch-rule-" + uuid.NewV4().String()
+	return &rN
 }
 
 func prepare() {
@@ -308,42 +354,69 @@ func prepare() {
 	cweService = cloudwatchevents.New(sess)
 
 	// get SQS url or create new one
-	sqsQueueURL = getQueueURL(sqsQueueName)
+	sqsQueueURL, sqsQueueARN = getQueueURLAndARN(sqsQueueName)
 
-	// put rule
-	putRuleAndTarget(ruleName, eventPattern, sqsQueueURL, sqsQueueName)
+	// put rules for schedule expressions
+	if *scheduleExpression != "" {
+		putRuleAndTargetForScheduleExp(generateRuleName(), scheduleExpression, sqsQueueName, sqsQueueURL, sqsQueueARN)
+	}
+
+	// put rules for addtional eventPatterns
+	if *eventPatterns != "" {
+		var patterns []map[string]interface{}
+		err := json.Unmarshal([]byte(*eventPatterns), &patterns)
+		if err != nil {
+			log.Printf("Error parsing event patterns: %s \n", *eventPatterns)
+		} else {
+			for _, p := range patterns {
+				pBytes, _ := json.Marshal(p)
+				pStr := string(pBytes)
+				putRuleAndTargetForEventPattern(generateRuleName(), &pStr, sqsQueueName, sqsQueueURL, sqsQueueARN)
+			}
+		}
+	}
+
+	// add SQS persmission for all rules
+	addQueuePermission(cwRules, sqsQueueURL, sqsQueueARN)
 
 	// init Dispatch driver client
 	driverClient = getDriverClient()
 }
 
-func cleanUpResources(rName, qURL, qName *string) {
+func cleanUpResources() {
 	log.Println("Cleaning up AWS resources...")
 	_, err := sqsService.DeleteQueue(&sqs.DeleteQueueInput{
-		QueueUrl: qURL,
+		QueueUrl: sqsQueueURL,
 	})
 	if err == nil {
 		log.Println("SQS Queue deleted.")
 	}
 
-	_, err = cweService.RemoveTargets(&cloudwatchevents.RemoveTargetsInput{
-		Rule: rName,
-		Ids: []*string{
-			qName,
-		},
-	})
-	_, err = cweService.DeleteRule(&cloudwatchevents.DeleteRuleInput{
-		Name: rName,
-	})
-	if err == nil {
-		log.Println("CloudWatch Rule deleted.")
+	for _, rule := range cwRules {
+		ruleName := rule.name
+		_, err = cweService.RemoveTargets(&cloudwatchevents.RemoveTargetsInput{
+			Rule: &ruleName,
+			Ids: []*string{
+				sqsQueueName,
+			},
+		})
+
+		_, err = cweService.DeleteRule(&cloudwatchevents.DeleteRuleInput{
+			Name: &ruleName,
+		})
+
+		if err == nil {
+			log.Printf("CloudWatch Rule %s deleted.\n", ruleName)
+		} else {
+			log.Println(err.Error())
+		}
 	}
 }
 
 func main() {
 	defer func() {
 		if *cleanUp {
-			cleanUpResources(ruleName, sqsQueueURL, sqsQueueName)
+			cleanUpResources()
 		}
 	}()
 

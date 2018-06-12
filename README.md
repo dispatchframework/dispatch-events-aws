@@ -38,20 +38,19 @@ Created event driver type: aws
 When creating AWS eventdriver, following parameters should be specified properly:
 * `region`: obtained from step 1, default *us-west-2*
 * Two ways to invoke target: *Event Pattern* or *Schedule*:
-  * `event-pattern` : setting up event pattern for AWS CloudWatch Rule, refer to [AWS Event Pattern](https://docs.aws.amazon.com/AmazonCloudWatch/latest/events/CloudWatchEventsandEventPatterns.html) for more details.
+  * `event-patterns` : setting up event patterns for AWS CloudWatch Rule, refer to [AWS Event Pattern](https://docs.aws.amazon.com/AmazonCloudWatch/latest/events/CloudWatchEventsandEventPatterns.html) for more details. Example can be found in **event-patterns-example.json**.
   * `schedule-expression` : specifying event schedule expression, please refer to [AWS Schedule Events](https://docs.aws.amazon.com/AmazonCloudWatch/latest/events/ScheduledEvents.html) for details.
 
 Following parameters are optional (have defaults):
-* `rule-name` : specifying CloudWatch Rule name, default "*dispatch*"
 * `queue-name` : specifying SQS queue name, default "*dispatch*"
 * `duration` : specifying SQS polling message duration, default "*20*" (0-20 seconds), which enables [Long-polling](https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-long-polling.html)
 * `namespace` : specifying event namespace, default "*dispatchframework.io/aws-event*"
 * `source-id` : specifying event source id, default a new UUID string
 * `clean-up` : clean up AWS resources after Driver shuts down. default *false*
 
-All parameters should be configued through `--set` flag. For example, create a event driver using `event-pattern`:
+All parameters should be configued through `--set` flag. For example, create a event driver using `event-patterns`:
 ```bash
-$ dispatch create eventdriver aws --secret aws-credential --set region="us-west-2" --set event-pattern="{\"source\":[\"aws.autoscaling\"]}" --set clean-up
+$ dispatch create eventdriver aws --secret aws-credential --set region="us-west-2" --set event-patterns="[{\"source\":[\"aws.autoscaling\"]}]" --set clean-up
 Created event driver: holy-grackle-805996
 ```
 
