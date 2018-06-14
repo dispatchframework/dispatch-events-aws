@@ -8,6 +8,7 @@ package main
 import (
 	"encoding/json"
 	"flag"
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -19,8 +20,11 @@ import (
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/cloudtrail"
 	"github.com/aws/aws-sdk-go/service/cloudwatchevents"
+	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/sqs"
+	"github.com/aws/aws-sdk-go/service/sts"
 	uuid "github.com/satori/go.uuid"
 
 	"github.com/vmware/dispatch/pkg/events"
@@ -30,6 +34,9 @@ import (
 var sess *session.Session
 var sqsService *sqs.SQS
 var cweService *cloudwatchevents.CloudWatchEvents
+var ctService *cloudtrail.CloudTrail
+var s3Service *s3.S3
+var stsService *sts.STS
 var driverClient driverclient.Client
 var sqsQueueURL, sqsQueueARN *string
 
@@ -45,12 +52,16 @@ type cwRuleEntry struct {
 }
 
 var cwRules []cwRuleEntry
-var eventPatterns = flag.String("event-patterns", "", "Event patterns for AWS CloudWatch Rule(json string slice)")
+var eventPatterns = flag.String("event-patterns", "", "event patterns for AWS cloudwatch rule (json string slice)")
 var scheduleExpression = flag.String("schedule-expression", "", "Schedule expression, For example, cron(0 20 * * ? *) or rate(5 minutes).")
 
 // SQS args
-var sqsQueueName = flag.String("queue-name", "dispatch", "Set SQS queue name, will be used as CloudWatch Rule target")
+var sqsQueueName = flag.String("queue-name", "dispatch", "Set SQS queue name prefix")
 var fetchDuration = flag.Int64("duration", 20, "Fetching duration in seconds")
+
+// CloudTrail and s3 bucket args
+var bucketName = flag.String("bucket-name", "dispatch-events-aws-tweet-example", "bucket name")
+var trailName = flag.String("trail-name", "dispatch-events-aws-"+uuid.NewV4().String(), "Set CloudTrail name")
 
 // Dispatch Event args
 var eventNamespace = flag.String("namespace", "dispatchframework.io/aws-event", "Set event namespace")
@@ -250,6 +261,7 @@ func addQueuePermission(rules []cwRuleEntry, qURL, qARN *string) error {
 		},
 	})
 	if err != nil {
+		log.Println(err)
 		return err
 	}
 
@@ -257,52 +269,41 @@ func addQueuePermission(rules []cwRuleEntry, qURL, qARN *string) error {
 	return nil
 }
 
-func putRuleAndTargetForScheduleExp(rN, scheduleExp, qName, qURL, qARN *string) {
-	// put rule
-	var (
-		putRuleOutput *cloudwatchevents.PutRuleOutput
-		err           error
-	)
-	putRuleOutput, err = cweService.PutRule(&cloudwatchevents.PutRuleInput{
-		Name:               rN,
-		Description:        aws.String("Dispatch AWS event driver rule with Schedule Experssion"),
-		ScheduleExpression: scheduleExp,
-		State:              aws.String(cloudwatchevents.RuleStateEnabled),
-	})
-
-	if err != nil {
-		panic(err)
-	}
-	log.Printf("PutRuleOutput: %s\n", putRuleOutput.String())
-
-	cwRules = append(cwRules, cwRuleEntry{
-		name: *rN,
-		arn:  *putRuleOutput.RuleArn,
-	})
-
-	// put queue as target in rule
-	_, err = cweService.PutTargets(&cloudwatchevents.PutTargetsInput{
-		Rule: rN,
-		Targets: []*cloudwatchevents.Target{
-			&cloudwatchevents.Target{
-				Id:  qName,
-				Arn: qARN,
+func makeS3EventPattern(bucketName *string) string {
+	pattern := map[string]interface{}{
+		"source": []string{
+			"aws.s3",
+		},
+		"detail-type": []string{
+			"AWS API Call via CloudTrail",
+		},
+		"detail": map[string]interface{}{
+			"eventSource": []string{
+				"s3.amazonaws.com",
+			},
+			"eventName": []string{
+				"PutObject",
+			},
+			"requestParameters": map[string]interface{}{
+				"bucketName": []string{
+					*bucketName,
+				},
 			},
 		},
-	})
-	if err != nil {
-		panic(err)
 	}
-	log.Printf("Put schedule expression rule and target done. \n")
+	r, _ := json.Marshal(pattern)
+	return string(r)
 }
 
-func putRuleAndTargetForEventPattern(rN, pattern, qName, qURL, qARN *string) {
+func putRuleAndTarget(rN, pattern, qName, qURL, qARN *string) {
 
 	// put rule
 	var (
 		putRuleOutput *cloudwatchevents.PutRuleOutput
 		err           error
 	)
+
+	log.Printf("Event Pattern: %s", *pattern)
 	putRuleOutput, err = cweService.PutRule(&cloudwatchevents.PutRuleInput{
 		Name:         rN,
 		Description:  aws.String("Dispatch AWS event driver rule with EventPattern"),
@@ -333,7 +334,136 @@ func putRuleAndTargetForEventPattern(rN, pattern, qName, qURL, qARN *string) {
 	if err != nil {
 		panic(err)
 	}
-	log.Printf("Put event pattern rule and target done. \n")
+	log.Printf("Put rule and target done. \n")
+}
+
+// create cloud trail and upload trail to bucket
+func createCloudTrail(trailName, bucketName *string) {
+
+	// first check bucket existence
+	listBucketsOutput, err := s3Service.ListBuckets(&s3.ListBucketsInput{})
+	if err != nil {
+		log.Println("Unable to list buckets. continue")
+	}
+	exist := false
+	for _, bucket := range listBucketsOutput.Buckets {
+		if *bucket.Name == *bucketName {
+			exist = true
+			break
+		}
+	}
+	if !exist {
+		// create s3 bucket and images folder
+		callerIdentityOutput, err := stsService.GetCallerIdentity(&sts.GetCallerIdentityInput{})
+		if err != nil {
+			panic(err)
+		}
+
+		callerID := aws.StringValue(callerIdentityOutput.Account)
+
+		s3Policy := map[string]interface{}{
+			"Version": "2012-10-17",
+			"Statement": []map[string]interface{}{
+				{
+					"Sid":    "AWSCloudTrailAclCheck",
+					"Effect": "Allow",
+					"Principal": map[string]interface{}{
+						"Service": "cloudtrail.amazonaws.com",
+					},
+					"Action":   "s3:GetBucketAcl",
+					"Resource": "arn:aws:s3:::" + *bucketName,
+				},
+				{
+					"Sid":    "AWSCloudTrailWrite",
+					"Effect": "Allow",
+					"Principal": map[string]interface{}{
+						"Service": "cloudtrail.amazonaws.com",
+					},
+					"Action":   "s3:PutObject",
+					"Resource": "arn:aws:s3:::" + *bucketName + "/AWSLogs/" + callerID + "/*",
+					"Condition": map[string]interface{}{
+						"StringEquals": map[string]interface{}{
+							"s3:x-amz-acl": "bucket-owner-full-control",
+						},
+					},
+				},
+			},
+		}
+
+		policy, err := json.Marshal(s3Policy)
+		if err != nil {
+			fmt.Println("Error marshalling request")
+			os.Exit(0)
+		}
+
+		_, err = s3Service.CreateBucket(&s3.CreateBucketInput{
+			Bucket: bucketName,
+			CreateBucketConfiguration: &s3.CreateBucketConfiguration{
+				LocationConstraint: aws.String(*awsRegion),
+			},
+		})
+		if err != nil {
+			panic(err)
+		}
+
+		_, err = s3Service.PutBucketPolicy(&s3.PutBucketPolicyInput{
+			Bucket: bucketName,
+			Policy: aws.String(string(policy)),
+		})
+		if err != nil {
+			panic(err)
+		}
+
+		err = s3Service.WaitUntilBucketExists(&s3.HeadBucketInput{
+			Bucket: bucketName,
+		})
+		log.Println("Create s3 bucket done.")
+
+		// put folder
+		_, err = s3Service.PutObject(&s3.PutObjectInput{
+			Bucket: bucketName,
+			Key:    aws.String("images/"),
+		})
+		if err != nil {
+			panic(err)
+		}
+		log.Println("S3 object images/ created.")
+	}
+
+	_, err = ctService.CreateTrail(&cloudtrail.CreateTrailInput{
+		Name:         trailName,
+		S3BucketName: bucketName,
+	})
+	if err != nil {
+		panic(err)
+	}
+
+	_, err = ctService.StartLogging(&cloudtrail.StartLoggingInput{
+		Name: trailName,
+	})
+	if err != nil {
+		panic(err)
+	}
+
+	_, err = ctService.PutEventSelectors(&cloudtrail.PutEventSelectorsInput{
+		TrailName: trailName,
+		EventSelectors: []*cloudtrail.EventSelector{
+			{
+				DataResources: []*cloudtrail.DataResource{
+					{
+						Values: []*string{
+							aws.String("arn:aws:s3:::" + *bucketName + "/images"),
+						},
+						Type: aws.String("AWS::S3::Object"),
+					},
+				},
+			},
+		},
+	})
+	if err != nil {
+		panic(err)
+	}
+	log.Println("Create CloudTrail and event selector done.")
 }
 
 func generateRuleName() *string {
@@ -344,6 +474,7 @@ func generateRuleName() *string {
 func prepare() {
 
 	flag.Parse()
+
 	// make queue name unique to avoid '60 seconds' waiting time
 	fullName := *sqsQueueName + "-" + uuid.NewV4().String()
 	sqsQueueName = &fullName
@@ -352,14 +483,16 @@ func prepare() {
 	sess = getSession()
 	sqsService = sqs.New(sess)
 	cweService = cloudwatchevents.New(sess)
+	ctService = cloudtrail.New(sess)
+	s3Service = s3.New(sess)
+	stsService = sts.New(sess)
 
-	// get SQS url or create new one
+	// get SQS url & arn or create new one
 	sqsQueueURL, sqsQueueARN = getQueueURLAndARN(sqsQueueName)
 
-	// put rules for schedule expressions
-	if *scheduleExpression != "" {
-		putRuleAndTargetForScheduleExp(generateRuleName(), scheduleExpression, sqsQueueName, sqsQueueURL, sqsQueueARN)
-	}
+	// put rule for s3 bucket
+	pattern := makeS3EventPattern(bucketName)
+	putRuleAndTarget(generateRuleName(), &pattern, sqsQueueName, sqsQueueURL, sqsQueueARN)
 
 	// put rules for addtional eventPatterns
 	if *eventPatterns != "" {
@@ -371,13 +504,16 @@ func prepare() {
 			for _, p := range patterns {
 				pBytes, _ := json.Marshal(p)
 				pStr := string(pBytes)
-				putRuleAndTargetForEventPattern(generateRuleName(), &pStr, sqsQueueName, sqsQueueURL, sqsQueueARN)
+				putRuleAndTarget(generateRuleName(), &pStr, sqsQueueName, sqsQueueURL, sqsQueueARN)
 			}
 		}
 	}
 
 	// add SQS persmission for all rules
 	addQueuePermission(cwRules, sqsQueueURL, sqsQueueARN)
+
+	// init cloudtrail and policy
+	createCloudTrail(trailName, bucketName)
 
 	// init Dispatch driver client
 	driverClient = getDriverClient()
@@ -390,6 +526,8 @@ func cleanUpResources() {
 	})
 	if err == nil {
 		log.Println("SQS Queue deleted.")
+	} else {
+		log.Println(err.Error())
 	}
 
 	for _, rule := range cwRules {
@@ -411,6 +549,16 @@ func cleanUpResources() {
 			log.Println(err.Error())
 		}
 	}
+
+	_, err = ctService.DeleteTrail(&cloudtrail.DeleteTrailInput{
+		Name: trailName,
+	})
+	if err == nil {
+		log.Println("Cloudtrail delted.")
+	} else {
+		log.Println(err.Error())
+	}
+
 }
 
 func main() {

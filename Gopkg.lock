@@ -29,8 +29,11 @@
     "private/protocol/query",
     "private/protocol/query/queryutil",
     "private/protocol/rest",
+    "private/protocol/restxml",
     "private/protocol/xml/xmlutil",
+    "service/cloudtrail",
     "service/cloudwatchevents",
+    "service/s3",
     "service/sqs",
     "service/sts"
   ]
@@ -174,6 +177,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "04a50d1272b5b3eeb5bb5e8048ff69282d7278b76439841c0a8f4ff20f0ee072"
+  inputs-digest = "f6d1140334658780e18809627e9b239dfb40797bde9b499c54b711841bb90379"
   solver-name = "gps-cdcl"
   solver-version = 1
