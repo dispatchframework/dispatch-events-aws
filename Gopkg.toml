@@ -34,8 +34,8 @@
   version = "1.2.0"
 
 [[constraint]]
+  branch = "master"
   name = "github.com/vmware/dispatch"
-  version = "0.1.12"
 
 [prune]
   go-tests = true

@@ -44,6 +44,12 @@
   version = "v1.3.1"
 
 [[projects]]
+  branch = "master"
+  name = "github.com/codahale/hdrhistogram"
+  packages = ["."]
+  revision = "3a0bb77429bd3a61596f5e8a3172445844342120"
+
+[[projects]]
   name = "github.com/docker/libkv"
   packages = [
     ".",
@@ -64,6 +70,12 @@
   packages = ["."]
   revision = "6529cf7c58879c08d927016dde4477f18a0634cb"
   version = "v1.36.0"
+
+[[projects]]
+  branch = "master"
+  name = "github.com/go-openapi/swag"
+  packages = ["."]
+  revision = "811b1089cde9dad18d4d0c2d09fbdbf28dbd27a5"
 
 [[projects]]
   name = "github.com/go-playground/locales"
@@ -105,9 +117,20 @@
   revision = "d34b9ff171c21ad295489235aec8b6626023cd04"
 
 [[projects]]
+  branch = "master"
+  name = "github.com/mailru/easyjson"
+  packages = [
+    "buffer",
+    "jlexer",
+    "jwriter"
+  ]
+  revision = "3fdea8d05856a0c8df22ed4bc71b3219245e4485"
+
+[[projects]]
   name = "github.com/opentracing/opentracing-go"
   packages = [
     ".",
+    "ext",
     "log"
   ]
   revision = "1949ddbfd147afd4d964a9f00b24eb291e0e7c38"
@@ -132,6 +155,36 @@
   version = "v1.0.5"
 
 [[projects]]
+  name = "github.com/uber/jaeger-client-go"
+  packages = [
+    ".",
+    "config",
+    "internal/baggage",
+    "internal/baggage/remote",
+    "internal/spanlog",
+    "internal/throttler",
+    "internal/throttler/remote",
+    "log",
+    "rpcmetrics",
+    "thrift",
+    "thrift-gen/agent",
+    "thrift-gen/baggage",
+    "thrift-gen/jaeger",
+    "thrift-gen/sampling",
+    "thrift-gen/zipkincore",
+    "utils"
+  ]
+  revision = "b043381d944715b469fd6b37addfd30145ca1758"
+  version = "v2.14.0"
+
+[[projects]]
+  name = "github.com/uber/jaeger-lib"
+  packages = ["metrics"]
+  revision = "ed3a127ec5fef7ae9ea95b01b542c47fbd999ce5"
+  version = "v1.5.0"
+
+[[projects]]
+  branch = "master"
   name = "github.com/vmware/dispatch"
   packages = [
     "pkg/entity-store",
@@ -141,8 +194,7 @@
     "pkg/trace",
     "pkg/utils"
   ]
-  revision = "02cd0df509f7b28c6ed5835a336b728e7e13ce4d"
-  version = "v0.1.12"
+  revision = "710c8a7f6b656b813bbc2542eff68a844a43015b"
 
 [[projects]]
   branch = "master"
@@ -171,9 +223,15 @@
   revision = "14984d91328f9612b58443cbdf4a077d4fd71091"
   version = "v9.15.0"
 
+[[projects]]
+  name = "gopkg.in/yaml.v2"
+  packages = ["."]
+  revision = "5420a8b6744d3b0345ab293f6fcba19c978f1183"
+  version = "v2.2.1"
+
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "04a50d1272b5b3eeb5bb5e8048ff69282d7278b76439841c0a8f4ff20f0ee072"
+  inputs-digest = "dec5acd7b1a9616f5ed059f65489a4cd231dd301f42c455afc11ed97b4405c87"
   solver-name = "gps-cdcl"
   solver-version = 1

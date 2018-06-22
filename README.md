@@ -44,8 +44,7 @@ When creating AWS eventdriver, following parameters should be specified properly
 Following parameters are optional (have defaults):
 * `queue-name` : specifying SQS queue name, default "*dispatch*"
 * `duration` : specifying SQS polling message duration, default "*20*" (0-20 seconds), which enables [Long-polling](https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-long-polling.html)
-* `namespace` : specifying event namespace, default "*dispatchframework.io/aws-event*"
-* `source-id` : specifying event source id, default a new UUID string
+* `source` : specifying event source, default "dispatch"
 * `clean-up` : clean up AWS resources after Driver shuts down. default *false*
 
 All parameters should be configued through `--set` flag. For example, create a event driver using `event-patterns`:

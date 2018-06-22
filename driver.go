@@ -53,8 +53,7 @@ var sqsQueueName = flag.String("queue-name", "dispatch", "Set SQS queue name, wi
 var fetchDuration = flag.Int64("duration", 20, "Fetching duration in seconds")
 
 // Dispatch Event args
-var eventNamespace = flag.String("namespace", "dispatchframework.io/aws-event", "Set event namespace")
-var eventSourceID = flag.String("source-id", uuid.NewV4().String(), "Set custom Source ID for the driver")
+var eventSource = flag.String("source", "dispatch", "Set custom event source for the driver")
 
 // clean up resources after shutting down
 var cleanUp = flag.Bool("clean-up", false, "Clean up AWS resources after shutting down")
@@ -129,15 +128,13 @@ func handleEvent(m *sqs.Message) {
 	}
 
 	ev := &events.CloudEvent{
-		Namespace:          *eventNamespace,
 		EventType:          dat["source"].(string),
 		CloudEventsVersion: events.CloudEventsVersion,
-		SourceType:         "aws",
-		SourceID:           *eventSourceID,
+		Source:             *eventSource,
 		EventID:            uuid.NewV4().String(),
 		EventTime:          time.Now(),
 		ContentType:        "application/json",
-		Data:               *m.Body,
+		Data:               json.RawMessage(*m.Body),
 	}
 	// Push event to Dispatch
 	if err := driverClient.SendOne(ev); err != nil {
