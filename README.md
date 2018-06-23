@@ -63,13 +63,11 @@ Created event driver: trusting-marlin-576200
 ### 5. Create Subscription in Dispatch
 To make events from eventdriver be processed by Dispatch, the last step is to create Dispatch subscription which sends events to a function. For example, to create a `aws.autoscaling` event subscription (bind to function hello-py):
 ```bash
-$ dispatch create subscription hello-py --event-type="aws.autoscaling" --source-type="aws"
+$ dispatch create subscription hello-py --event-type="aws.autoscaling"
 created subscription: innocent-werewolf-420270
 ```
 
-`source-type` should be `aws`.
-
 `event-type` should be the AWS event source type that the subscription will be listening to. Please refer to [AWS Event Types](https://docs.aws.amazon.com/AmazonCloudWatch/latest/events/EventTypes.html) for more details.
 
-> **NOTE:** In subscription, `source-type` and `event-type` must match the CloudEvent attributes, otherwise Dispatch won't receive the event
+> **NOTE:** In subscription, `event-type` must match the CloudEvent attributes, otherwise Dispatch won't receive the event
 
