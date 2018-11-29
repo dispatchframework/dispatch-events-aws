@@ -58,8 +58,10 @@ var eventSource = flag.String("source", "dispatch", "Set custom event source for
 // clean up resources after shutting down
 var cleanUp = flag.Bool("clean-up", false, "Clean up AWS resources after shutting down")
 
-// debug
+// General config
 var dryRun = flag.Bool("dry-run", false, "Debug, pull messages and do not send Dispatch events")
+var org = flag.String("org", "default", "organization of this event driver")
+var dispatchEndpoint = flag.String("dispatch-api-endpoint", "localhost:8080", "dispatch server host")
 
 func getSession() *session.Session {
 	return session.Must(session.NewSessionWithOptions(session.Options{
@@ -178,10 +180,10 @@ func getDriverClient() driverclient.Client {
 	if *dryRun {
 		return nil
 	}
-
-	client, err := driverclient.NewHTTPClient()
+	token := os.Getenv(driverclient.AuthToken)
+	client, err := driverclient.NewHTTPClient(driverclient.WithGateway(*dispatchEndpoint), driverclient.WithToken(token))
 	if err != nil {
-		panic(err)
+		log.Fatalf("Error when creating the events client: %s", err.Error())
 	}
 	log.Println("Event driver initialized.")
 	return client
